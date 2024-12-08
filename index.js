@@ -1,137 +1,263 @@
-const express = require('express');
-const expressWs = require('express-ws');
-const path = require('path');
-const mongoose = require('mongoose');
-const session = require('express-session');
-const bcrypt = require('bcrypt');
+const express = require("express");
+const expressWs = require("express-ws");
+const path = require("path");
+const mongoose = require("mongoose");
+const session = require("express-session");
+const bcrypt = require("bcrypt");
+const { User, Poll } = require("./models");
 
 const PORT = 3000;
-//TODO: Update this URI to match your own MongoDB setup
-const MONGO_URI = 'mongodb://localhost:27017/keyin_test';
+const MONGO_URI = "mongodb://localhost:27017/keyin_test";
 const app = express();
 expressWs(app);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-app.use(session({
-    secret: 'voting-app-secret',
+app.use(express.static(path.join(__dirname, "public")));
+app.set("views", path.join(__dirname, "views"));
+app.set("view engine", "ejs");
+app.use(
+  session({
+    secret: "voting-app-secret",
     resave: false,
     saveUninitialized: false,
-}));
+  })
+);
+
+app.use((request, response, next) => {
+  response.locals.session = request.session;
+  next();
+});
+
 let connectedClients = [];
 
-//Note: Not all routes you need are present here, some are missing and you'll need to add them yourself.
+app.ws("/poll/:id/ws", (socket, request) => {
+  const pollId = request.params.id;
 
-app.ws('/ws', (socket, request) => {
-    connectedClients.push(socket);
+  connectedClients.push({ socket, pollId });
 
-    socket.on('message', async (message) => {
-        const data = JSON.parse(message);
-        
+  socket.on("message", async (message) => {
+    const { selectedOption, userId } = JSON.parse(message);
+    await onNewVote(pollId, selectedOption, userId);
+  });
+
+  socket.on("close", () => {
+    connectedClients = connectedClients.filter(
+      (client) => client.socket !== socket
+    );
+  });
+});
+
+async function onNewVote(pollId, selectedOption, userId) {
+  try {
+    const poll = await Poll.findById(pollId);
+    if (!poll) return;
+
+    if (poll.votedBy.includes(userId)) {
+      console.log("User has already voted on this poll.");
+      connectedClients
+        .filter((client) => client.pollId === pollId)
+        .forEach(({ socket }) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                message: "You have already voted on this poll.",
+              })
+            );
+          }
+        });
+      return;
+    }
+
+    const option = poll.options.find((opt) => opt.answer === selectedOption);
+    if (option) {
+      option.votes++;
+      poll.votedBy.push(userId);
+      await poll.save();
+
+      connectedClients
+        .filter((client) => client.pollId === pollId)
+        .forEach(({ socket }) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "voteUpdate", data: poll }));
+          }
+        });
+    }
+  } catch (error) {
+    console.error("Error processing vote:", error);
+  }
+}
+
+app.get("/", (request, response) => {
+  if (request.session.user?.id) {
+    return response.redirect("/dashboard");
+  }
+  response.render("index/unauthenticatedIndex");
+});
+
+app.get("/signup", (request, response) => {
+  response.render("signup", { errorMessage: null });
+});
+
+app.post("/signup", async (request, response) => {
+  const { username, password } = request.body;
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ username, password: hashedPassword });
+    await newUser.save();
+    response.redirect("/login");
+  } catch (error) {
+    console.error("Error during signup:", error);
+    response.render("signup", { errorMessage: "Username already exists." });
+  }
+});
+
+app.get("/login", (request, response) => {
+  response.render("auth/login", { errorMessage: null });
+});
+
+app.post("/login", async (request, response) => {
+  const { username, password } = request.body;
+
+  try {
+    const user = await User.findOne({ username });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return response.render("login", { errorMessage: "Invalid credentials" });
+    }
+
+    request.session.user = { id: user._id, username: user.username };
+    response.redirect("/dashboard");
+  } catch (error) {
+    console.error("Error during login:", error);
+    response.render("login", {
+      errorMessage: "An error occurred. Please try again.",
     });
-
-    socket.on('close', async (message) => {
-        
-    });
+  }
 });
 
-app.get('/', async (request, response) => {
-    if (request.session.user?.id) {
-        return response.redirect('/dashboard');
-    }
-
-    response.render('index/unauthenticatedIndex', {});
+app.get("/logout", (request, response) => {
+  request.session.destroy();
+  response.redirect("/");
 });
 
-app.get('/login', async (request, response) => {
-    
+app.get("/dashboard", async (request, response) => {
+  if (!request.session || !request.session.user) {
+    return response.redirect("/login");
+  }
+
+  try {
+    const polls = await Poll.find({ createdBy: request.session.user.id });
+    response.render("dashboard", { user: request.session.user, polls });
+  } catch (err) {
+    console.error("Error fetching polls:", err);
+    response.status(500).send("Error fetching polls.");
+  }
 });
 
-app.post('/login', async (request, response) => {
-    
-});
+app.post("/createPoll", async (request, response) => {
+  if (!request.session || !request.session.user) {
+    return response.redirect("/login");
+  }
 
-app.get('/signup', async (request, response) => {
-    if (request.session.user?.id) {
-        return response.redirect('/dashboard');
-    }
+  console.log("Incoming request body:", request.body);
 
-    return response.render('signup', { errorMessage: null });
-});
-
-app.get('/dashboard', async (request, response) => {
-    if (!request.session.user?.id) {
-        return response.redirect('/');
-    }
-
-    //TODO: Fix the polls, this should contain all polls that are active. I'd recommend taking a look at the
-    //authenticatedIndex template to see how it expects polls to be represented
-    return response.render('index/authenticatedIndex', { polls: [] });
-});
-
-app.get('/profile', async (request, response) => {
-    
-});
-
-app.get('/createPoll', async (request, response) => {
-    if (!request.session.user?.id) {
-        return response.redirect('/');
-    }
-
-    return response.render('createPoll')
-});
-
-// Poll creation
-app.post('/createPoll', async (request, response) => {
+  try {
     const { question, options } = request.body;
-    const formattedOptions = Object.values(options).map((option) => ({ answer: option, votes: 0 }));
 
-    const pollCreationError = onCreateNewPoll(question, formattedOptions);
-    //TODO: If an error occurs, what should we do?
+    if (!question.trim()) {
+      return response.render("createPoll", {
+        errorMessage: "Please provide a question.",
+      });
+    }
+
+    if (!options || options.length < 2 || options.some((opt) => !opt.trim())) {
+      return response.render("createPoll", {
+        errorMessage: "Please provide at least two valid options.",
+      });
+    }
+
+    const formattedOptions = options.map((opt) => ({
+      answer: opt.trim(),
+    }));
+
+    const poll = new Poll({
+      question: question.trim(),
+      options: formattedOptions,
+      createdBy: request.session.user.id,
+    });
+
+    await poll.save();
+    response.redirect("/dashboard");
+  } catch (error) {
+    console.error("Error creating poll:", error);
+    response.render("createPoll", {
+      errorMessage: "Failed to create poll. Please try again.",
+    });
+  }
 });
 
-mongoose.connect(MONGO_URI)
-    .then(() => app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`)))
-    .catch((err) => console.error('MongoDB connection error:', err));
+app.get("/createPoll", (request, response) => {
+  if (!request.session.user?.id) return response.redirect("/");
+  response.render("createPoll");
+});
 
-/**
- * Handles creating a new poll, based on the data provided to the server
- * 
- * @param {string} question The question the poll is asking
- * @param {[answer: string, votes: number]} pollOptions The various answers the poll allows and how many votes each answer should start with
- * @returns {string?} An error message if an error occurs, or null if no error occurs.
- */
-async function onCreateNewPoll(question, pollOptions) {
-    try {
-        //TODO: Save the new poll to MongoDB
-    }
-    catch (error) {
-        console.error(error);
-        return "Error creating the poll, please try again";
+app.get("/poll/:id", async (request, response) => {
+  if (!request.session || !request.session.user) {
+    return response.redirect("/login");
+  }
+
+  const pollId = request.params.id;
+  if (!mongoose.Types.ObjectId.isValid(pollId)) {
+    return response.status(400).send("Invalid Poll ID");
+  }
+
+  try {
+    const poll = await Poll.findById(request.params.id);
+    if (!poll) {
+      return response.status(404).send("Poll not found.");
     }
 
-    //TODO: Tell all connected sockets that a new poll was added
+    response.render("poll", { poll, user: request.session.user });
+  } catch (error) {
+    console.error("Error fetching poll:", error);
+    response.status(500).send("Error fetching poll.");
+  }
+});
 
-    return null;
-}
+app.get("/allPolls", async (request, response) => {
+  try {
+    const polls = await Poll.find({}).populate("createdBy", "username");
+    response.render("allPolls", { polls, user: request.session.user });
+  } catch (error) {
+    console.error("Error fetching all polls:", error);
+    response.status(500).send("Error fetching polls.");
+  }
+});
 
-/**
- * Handles processing a new vote on a poll
- * 
- * This function isn't necessary and should be removed if it's not used, but it's left as a hint to try and help give
- * an idea of how you might want to handle incoming votes
- * 
- * @param {string} pollId The ID of the poll that was voted on
- * @param {string} selectedOption Which option the user voted for
- */
-async function onNewVote(pollId, selectedOption) {
-    try {
-        
-    }
-    catch (error) {
-        console.error('Error updating poll:', error);
-    }
-}
+app.get("/profile", async (request, response) => {
+  if (!request.session || !request.session.user) {
+    return response.redirect("/login");
+  }
+
+  try {
+    const userPolls = await Poll.find({ createdBy: request.session.user.id });
+    response.render("profile", {
+      user: request.session.user,
+      polls: userPolls,
+    });
+  } catch (error) {
+    console.error("Error fetching user polls for profile:", error);
+    response.status(500).send("Error fetching profile data.");
+  }
+});
+
+mongoose
+  .connect(MONGO_URI)
+  .then(() =>
+    app.listen(PORT, () =>
+      console.log(`Server running on http://localhost:${PORT}`)
+    )
+  )
+  .catch((error) => console.error("MongoDB connection error:", error));

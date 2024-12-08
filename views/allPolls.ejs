@@ -1,0 +1,23 @@
+<%- include('partials/header') %>
+
+<div class="main-content">
+  <h1>All Polls</h1>
+
+  <% if (polls && polls.length > 0) { %>
+  <ul>
+    <% polls.forEach(poll => { %>
+    <li>
+      <a href="/poll/<%= poll._id %>"><%= poll.question %></a>
+      <p>Created by: <%= poll.createdBy.username %></p>
+    </li>
+
+    <% }); %>
+  </ul>
+  <% } else { %>
+  <p>No polls are available yet. Be the first to create one!</p>
+  <% } %>
+
+  <a href="/dashboard" class="action-button">Back to Dashboard</a>
+</div>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,52 @@
+<%- include('partials/header') %>
+
+<div class="main-content">
+  <div class="poll-container">
+    <h1 class="poll-question"><%= poll.question %></h1>
+
+    <ul class="poll-options">
+      <% poll.options.forEach(option => { %>
+      <li class="poll-option-item">
+        <button class="vote-button" data-answer="<%= option.answer %>">
+          Vote for <%= option.answer %>
+        </button>
+        <span class="vote-count">
+          Votes:
+          <span id="votes-<%= option.answer %>"><%= option.votes %></span>
+        </span>
+      </li>
+      <% }); %>
+    </ul>
+
+    <a href="/dashboard" class="action-button">Back to Dashboard</a>
+  </div>
+</div>
+
+<script>
+  const ws = new WebSocket(`ws://${location.host}/poll/<%= poll._id %>/ws`);
+  const voteButtons = document.querySelectorAll(".vote-button");
+
+  const userId = "<%= user.id %>";
+
+  voteButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const selectedOption = button.dataset.answer;
+      ws.send(JSON.stringify({ selectedOption, userId }));
+    });
+  });
+
+  ws.onmessage = (event) => {
+    const { type, data } = JSON.parse(event.data);
+
+    if (type === "voteUpdate") {
+      data.options.forEach((option) => {
+        document.getElementById(`votes-${option.answer}`).textContent =
+          option.votes;
+      });
+    } else if (type === "error") {
+      alert(data.message);
+    }
+  };
+</script>
+
+<%- include('partials/footer') %>

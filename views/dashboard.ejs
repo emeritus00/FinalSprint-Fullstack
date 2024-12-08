@@ -1,0 +1,40 @@
+<%- include('partials/header') %>
+<div class="main-content">
+  <h1>Poll Dashboard</h1>
+
+  <h2>Create a New Poll</h2>
+  <form action="/createPoll" method="POST" style="margin-top: 20px">
+    <label for="question">Poll Question:</label>
+    <input type="text" id="question" name="question" required />
+
+    <label for="option1">Option 1:</label>
+    <input type="text" id="option1" name="options[]" required />
+
+    <label for="option2">Option 2:</label>
+    <input type="text" id="option2" name="options[]" required />
+
+    <label for="option2">Option 2:</label>
+    <input type="text" id="option2" name="options[]" />
+
+    <label for="option2">Option 2:</label>
+    <input type="text" id="option2" name="options[]" />
+
+    <button type="submit" class="action-button">Create Poll</button>
+  </form>
+
+  <h2>Your Polls</h2>
+  <% if (polls && polls.length > 0) { %>
+  <ul>
+    <% polls.forEach(poll => { %>
+    <li>
+      <a href="/poll/<%= poll._id %>"><%= poll.question %></a>
+    </li>
+    <% }); %>
+  </ul>
+  <% } else { %>
+  <p>No polls available. Create one above!</p>
+  <% } %>
+  <h2>Browse All Polls</h2>
+  <a href="/allPolls" class="action-button">View All Polls</a>
+</div>
+<%- include('partials/footer') %>

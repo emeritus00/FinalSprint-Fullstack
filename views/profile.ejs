@@ -1,0 +1,30 @@
+<%- include('partials/header') %>
+
+<div class="main-content">
+  <h1>User Profile</h1>
+  <% if (user) { %>
+  <p>Welcome to your profile page, <%= user.username %>.</p>
+
+  <h2>Your Polls</h2>
+  <% if (polls && polls.length > 0) { %>
+  <ul>
+    <% polls.forEach(poll => { %>
+    <li>
+      <a href="/poll/<%= poll._id %>"><%= poll.question %></a>
+    </li>
+    <% }); %>
+  </ul>
+  <% } else { %>
+  <p>
+    You have not created any polls yet. Create one now on the
+    <a href="/dashboard">Dashboard</a>.
+  </p>
+  <% } %> <% } else { %>
+  <p>
+    You are not logged in. Please <a href="/login">log in</a> to view your
+    profile.
+  </p>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>
