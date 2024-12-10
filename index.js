@@ -191,6 +191,13 @@ app.get("/dashboard", async (request, response) => {
   }
 });
 
+// Route to render the "Create Poll" page
+app.get("/createPoll", (request, response) => {
+  if (!request.session.user?.id) return response.redirect("/");
+  response.render("createPoll");
+});
+
+// Route to handle the submission of a new poll
 app.post("/createPoll", async (request, response) => {
   if (!request.session || !request.session.user) {
     return response.redirect("/login");
@@ -207,6 +214,7 @@ app.post("/createPoll", async (request, response) => {
       });
     }
 
+    // Validate the options field
     if (!options || options.length < 2 || options.some((opt) => !opt.trim())) {
       return response.render("createPoll", {
         errorMessage: "Please provide at least two valid options.",
@@ -217,6 +225,7 @@ app.post("/createPoll", async (request, response) => {
       answer: opt.trim(),
     }));
 
+    // Create a new poll object
     const poll = new Poll({
       question: question.trim(),
       options: formattedOptions,
@@ -234,11 +243,7 @@ app.post("/createPoll", async (request, response) => {
   }
 });
 
-app.get("/createPoll", (request, response) => {
-  if (!request.session.user?.id) return response.redirect("/");
-  response.render("createPoll");
-});
-
+// Route to render a specific poll page
 app.get("/poll/:id", async (request, response) => {
   if (!request.session || !request.session.user) {
     return response.redirect("/login");
@@ -262,6 +267,7 @@ app.get("/poll/:id", async (request, response) => {
   }
 });
 
+// Route to render all polls
 app.get("/allPolls", async (request, response) => {
   try {
     const polls = await Poll.find({}).populate("createdBy", "username");
@@ -272,6 +278,7 @@ app.get("/allPolls", async (request, response) => {
   }
 });
 
+// Route to render the user's profile page
 app.get("/profile", async (request, response) => {
   if (!request.session || !request.session.user) {
     return response.redirect("/login");
