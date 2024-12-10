@@ -107,8 +107,6 @@ async function onNewVote(pollId, selectedOption, userId) {
   }
 }
 
-// Routes for rendering pages and handling requests
-
 // Home page route
 app.get("/", (request, response) => {
   if (request.session.user?.id) {
