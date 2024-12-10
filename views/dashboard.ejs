@@ -2,6 +2,12 @@
 <div class="main-content">
   <h1>Poll Dashboard</h1>
 
+  <% if (message) { %>
+  <div id="success-message" class="success-message" data-timeout="5000">
+    <p><%= message %></p>
+  </div>
+  <% } %>
+
   <h2>Create a New Poll</h2>
   <form action="/createPoll" method="POST" style="margin-top: 20px">
     <label for="question">Poll Question:</label>
@@ -14,10 +20,10 @@
     <input type="text" id="option2" name="options[]" required />
 
     <label for="option2">Option 2:</label>
-    <input type="text" id="option2" name="options[]" />
+    <input type="text" id="option3" name="options[]" />
 
     <label for="option2">Option 2:</label>
-    <input type="text" id="option2" name="options[]" />
+    <input type="text" id="option4" name="options[]" />
 
     <button type="submit" class="action-button">Create Poll</button>
   </form>
@@ -37,4 +43,17 @@
   <h2>Browse All Polls</h2>
   <a href="/allPolls" class="action-button">View All Polls</a>
 </div>
+
+<script>
+  // Hide success message after a timeout
+  const successMessage = document.getElementById("success-message");
+  if (successMessage) {
+    const timeout = successMessage.getAttribute("data-timeout") || 3000; // Default to 5 seconds
+    setTimeout(() => {
+      successMessage.style.transition = "opacity 0.5s";
+      successMessage.style.opacity = 0;
+      setTimeout(() => successMessage.remove(), 500); // Allow fade-out animation to complete
+    }, timeout);
+  }
+</script>
 <%- include('partials/footer') %>

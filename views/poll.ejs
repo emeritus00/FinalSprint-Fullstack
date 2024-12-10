@@ -8,7 +8,7 @@
       <% poll.options.forEach(option => { %>
       <li class="poll-option-item">
         <button class="vote-button" data-answer="<%= option.answer %>">
-          Vote for <%= option.answer %>
+          <%= option.answer %>
         </button>
         <span class="vote-count">
           Votes:
