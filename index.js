@@ -1,4 +1,5 @@
 // Import required modules
+// Import required modules
 const express = require("express");
 const expressWs = require("express-ws");
 const path = require("path");
@@ -8,21 +9,29 @@ const bcrypt = require("bcrypt");
 const { User, Poll } = require("./models");
 
 // Define constants
+// Define constants
 const PORT = 3000;
 const MONGO_URI = "mongodb://localhost:27017/keyin_test";
+
+// Initialize Express application
 
 // Initialize Express application
 const app = express();
 expressWs(app);
 
 // Middleware for parsing request bodies and serving static files
+// Middleware for parsing request bodies and serving static files
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // Set up the view engine and views directory
+
+// Set up the view engine and views directory
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
+
+// Configure session management
 
 // Configure session management
 app.use(
@@ -34,19 +43,24 @@ app.use(
 );
 
 // Make session data available in all templates
+// Make session data available in all templates
 app.use((request, response, next) => {
   response.locals.session = request.session;
   next();
 });
 
 // Maintain a list of connected WebSocket clients
+// Maintain a list of connected WebSocket clients
 let connectedClients = [];
 
+// WebSocket route for real-time voting updates
 // WebSocket route for real-time voting updates
 app.ws("/poll/:id/ws", (socket, request) => {
   const pollId = request.params.id;
   const userId = request.query.userId;
+  const userId = request.query.userId;
 
+  connectedClients.push({ socket, pollId, userId });
   connectedClients.push({ socket, pollId, userId });
 
   socket.on("message", async (message) => {
@@ -62,14 +76,29 @@ app.ws("/poll/:id/ws", (socket, request) => {
 });
 
 // Process a new vote for a poll
+// Process a new vote for a poll
 async function onNewVote(pollId, selectedOption, userId) {
   try {
     const poll = await Poll.findById(pollId);
     if (!poll) return;
 
     // Check if the user has already voted
+    // Check if the user has already voted
     if (poll.votedBy.includes(userId)) {
       console.log("User has already voted on this poll.");
+
+      // Send error message only to the user who attempted to vote again
+      const client = connectedClients.find(
+        (client) => client.pollId === pollId && client.userId === userId
+      );
+      if (client && client.socket.readyState === WebSocket.OPEN) {
+        client.socket.send(
+          JSON.stringify({
+            type: "error",
+            message: "You have already voted on this poll.",
+          })
+        );
+      }
 
       // Send error message only to the user who attempted to vote again
       const client = connectedClients.find(
@@ -87,12 +116,14 @@ async function onNewVote(pollId, selectedOption, userId) {
     }
 
     // Process the vote
+    // Process the vote
     const option = poll.options.find((opt) => opt.answer === selectedOption);
     if (option) {
       option.votes++;
       poll.votedBy.push(userId);
       await poll.save();
 
+      // Notify all connected clients about the updated vote counts
       // Notify all connected clients about the updated vote counts
       connectedClients
         .filter((client) => client.pollId === pollId)
@@ -116,6 +147,7 @@ app.get("/", (request, response) => {
 });
 
 // User signup routes
+// User signup routes
 app.get("/signup", (request, response) => {
   response.render("signup", { errorMessage: null });
 });
@@ -135,6 +167,7 @@ app.post("/signup", async (request, response) => {
 });
 
 // User login routes
+// User login routes
 app.get("/login", (request, response) => {
   response.render("auth/login", { errorMessage: null });
 });
@@ -148,6 +181,9 @@ app.post("/login", async (request, response) => {
       return response.render("auth/login", {
         errorMessage: "Invalid credentials",
       });
+      return response.render("auth/login", {
+        errorMessage: "Invalid credentials",
+      });
     }
 
     request.session.user = { id: user._id, username: user.username };
@@ -155,17 +191,20 @@ app.post("/login", async (request, response) => {
   } catch (error) {
     console.error("Error during login:", error);
     response.render("auth/login", {
+    response.render("auth/login", {
       errorMessage: "An error occurred. Please try again.",
     });
   }
 });
 
 // Logout route
+// Logout route
 app.get("/logout", (request, response) => {
   request.session.destroy();
   response.redirect("/");
 });
 
+// Dashboard route
 // Dashboard route
 app.get("/dashboard", async (request, response) => {
   if (!request.session || !request.session.user) {
@@ -174,6 +213,15 @@ app.get("/dashboard", async (request, response) => {
 
   try {
     const polls = await Poll.find({ createdBy: request.session.user.id });
+
+    // Retrieve the flash message from the session
+    const message = request.session.message;
+    request.session.message = null; // Clear the message after retrieving it
+    response.render("dashboard", {
+      user: request.session.user,
+      polls,
+      message,
+    });
 
     // Retrieve the flash message from the session
     const message = request.session.message;
@@ -231,6 +279,7 @@ app.post("/createPoll", async (request, response) => {
     });
 
     await poll.save();
+    request.session.message = "Poll created successfully!";
     request.session.message = "Poll created successfully!";
     response.redirect("/dashboard");
   } catch (error) {
