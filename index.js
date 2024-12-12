@@ -283,10 +283,12 @@ app.get("/profile", async (request, response) => {
   }
 
   try {
-    const userPolls = await Poll.find({ createdBy: request.session.user.id });
+    const userPolls = await Poll.find({ createdBy: request.session.user.id }); // Retrieve polls created by the user
+    const votedPolls = await Poll.find({ votedBy: request.session.user.id }); // Retrieve polls the user has voted on
     response.render("profile", {
       user: request.session.user,
       polls: userPolls,
+      votedPolls, // Pass voted polls to the template
     });
   } catch (error) {
     console.error("Error fetching user polls for profile:", error);
